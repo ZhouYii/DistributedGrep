@@ -15,6 +15,7 @@ int main(int argc, char** argv) {
  *  Then it will initialize the other nodes in the network.
  *  This suggests that we know all the nodes in the network anyways. */
 void init_structs() {
+  int port = PORT;
   system("mkdir tmp log > /dev/null");
   if(pthread_mutex_init(&print_mutex, NULL)) {
     printf("Can't initialize mutex\n");
@@ -22,16 +23,15 @@ void init_structs() {
   }
   _data.cluster_list = NULL;
   /* Populate some cluster data */
-  if(!list_insert(&_data.cluster_list, "192.168.139.135", 5050)) {
+  if(!list_insert(&_data.cluster_list, "192.168.139.135", port)) {
     printf("Failed to init\n");
     exit(1);
   }
-  if(!list_insert(&_data.cluster_list, "192.168.139.134", 5050)) {
+  if(!list_insert(&_data.cluster_list, "192.168.139.134", port)) {
     printf("Failed to init\n");
     exit(1);
   }
   /* Launch server thread */
-  int port = PORT;
   if(0 != pthread_create(&_data.server_thread, NULL, server_listener, &port)) {
     printf("failed allocating a new pthread for the listener\n");
     exit(1);
@@ -110,7 +110,6 @@ void send_grep(const char* args) {
 
 
 void* server_listener(void* listen_port) {
-  int* port = (int*) listen_port;
   char buf[BUF_SIZE];
   int socket_fd = 0, conn_fd =0;
   struct sockaddr_in server_addr;
@@ -121,9 +120,9 @@ void* server_listener(void* listen_port) {
   memset(&server_addr, '0', sizeof(server_addr));
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  server_addr.sin_port = htons((uint16_t)*(port));
+  server_addr.sin_port = htons((uint16_t)PORT);
   pthread_mutex_lock(&print_mutex);
-  printf("Listener started on port %d\n", (int)*(port));
+  printf("Listener started on port %d\n", PORT);
   pthread_mutex_unlock(&print_mutex);
 
   if(bind(socket_fd, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {
