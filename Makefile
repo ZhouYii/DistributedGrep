@@ -17,4 +17,5 @@ main.o : main.c
 list.o : LL.c
 	$(CC) $(FLAGS) LL.c
 
-
+clean :
+	rm ./*.o

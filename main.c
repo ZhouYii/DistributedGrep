@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
  *  Then it will initialize the other nodes in the network.
  *  This suggests that we know all the nodes in the network anyways. */
 void init_structs() {
+  system("mkdir tmp log");
   if(pthread_mutex_init(&print_mutex, NULL)) {
     printf("Can't initialize mutex\n");
     exit(1);
@@ -36,7 +37,6 @@ void start_repl() {
   while(1) {
     char input_buf[1024];
     fgets(input_buf, 1024, stdin);
-    printf("%s\n", input_buf);
     if(0 == strncmp("grep", input_buf, 4)) {
       send_grep(input_buf);
     }
@@ -71,7 +71,6 @@ void send_grep(const char* args) {
   if(args == NULL) return;
   /* TODO : connect socket ignores address argument */
   list_node_t *head = _data.cluster_list;
-  list_print(head);
   while(head != NULL) {
     /* Free this in the thread */
     cmd_info_t *cmd = malloc(sizeof(cmd_info_t));
@@ -91,8 +90,9 @@ void send_grep(const char* args) {
       exit(1);
     }
     head = head->next;
+    free(cmd);
   }
-
+  
   return;
 }
 
@@ -121,15 +121,20 @@ void* server_listener(void* listen_port) {
   }
   while(1) {
     conn_fd = accept(socket_fd, (struct sockaddr*) NULL, NULL);
-    printf("ACCEPTED");
     if(recv(conn_fd, buf, BUF_SIZE, NO_FLAGS) > 0) {
       if(atoi(buf) == GREP) {
-        printf("GREP ON SERVER\n\n");
-        char sendbuf[5];
+        printf("GREP\n");
+        char sendbuf[BUF_SIZE], *filename;
         sprintf(sendbuf, "%d", GREP_ACK);
         send(conn_fd, sendbuf, strlen(sendbuf), NO_FLAGS);
         recv(conn_fd, buf, BUF_SIZE, NO_FLAGS);
-        printf("Recieved from client: %s\n", buf);
+        strip_newline(buf);
+        filename = timestamp();
+        sprintf(sendbuf, "grep %s log/*> tmp/%s", buf, filename);
+        system(sendbuf);
+
+
+        free(filename);
       }
     }
     close(conn_fd);

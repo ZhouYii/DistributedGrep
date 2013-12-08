@@ -1,8 +1,42 @@
 #ifndef HELPER_H
 #define HELPER_H
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include "consts.h"
+void strip_newline(char* str) {
+  if(str == NULL)
+    return;
+
+  while(*str != '\0')
+    str++;
+  str--;
+  while(*str =='\n') {
+    *str = '\0';
+    str--;
+  }
+}
+
+void to_file_name(char* str) {
+  if(str == NULL)
+    return;
+  char *fast=str, *slow=str;
+  while(*fast != '\0') {
+    if(*fast != ' ') 
+      *slow++ = *fast;
+    fast++;
+  }
+  *slow = '\0';
+}
+char* timestamp() {
+  char* buf = malloc(sizeof(char)*BUF_SIZE);
+  time_t ltime; /* calendar time */
+  ltime=time(NULL); /* get current cal time */
+  asctime_r(localtime(&ltime), buf);
+  to_file_name(buf);
+  return buf;
+}
+
 void err_handler(const char* msg) {
     if(msg)
         printf("%s\n", msg);
