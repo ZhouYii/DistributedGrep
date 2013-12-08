@@ -22,13 +22,17 @@ void init_structs() {
   }
   _data.cluster_list = NULL;
   /* Populate some cluster data */
-  for(int i = 0 ; i < 1 ; i++) 
-    if(!list_insert(&_data.cluster_list, "127.0.0.1", BASE_PORT+i)) {
-      printf("Failed to init\n");
-      exit(1);
-    }
+  if(!list_insert(&_data.cluster_list, "192.168.139.135", 5050)) {
+    printf("Failed to init\n");
+    exit(1);
+  }
+  if(!list_insert(&_data.cluster_list, "192.168.139.134", 5050)) {
+    printf("Failed to init\n");
+    exit(1);
+  }
   /* Launch server thread */
-  if(0 != pthread_create(&_data.server_thread, NULL, server_listener, (int *)5050)) {
+  int port = PORT;
+  if(0 != pthread_create(&_data.server_thread, NULL, server_listener, &port)) {
     printf("failed allocating a new pthread for the listener\n");
     exit(1);
   }
@@ -76,7 +80,7 @@ void* remote_exec(void *dat) {
 }
 
 void send_grep(const char* args) {
-  total_jobs = 1;
+  total_jobs = 2;
   if(args == NULL) return;
   /* TODO : connect socket ignores address argument */
   list_node_t *head = _data.cluster_list;
@@ -106,6 +110,7 @@ void send_grep(const char* args) {
 
 
 void* server_listener(void* listen_port) {
+  int* port = (int*) listen_port;
   char buf[BUF_SIZE];
   int socket_fd = 0, conn_fd =0;
   struct sockaddr_in server_addr;
@@ -116,9 +121,9 @@ void* server_listener(void* listen_port) {
   memset(&server_addr, '0', sizeof(server_addr));
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  server_addr.sin_port = htons((uint16_t)listen_port);
+  server_addr.sin_port = htons((uint16_t)*(port));
   pthread_mutex_lock(&print_mutex);
-  printf("Listener started on port %d\n", (int)listen_port);
+  printf("Listener started on port %d\n", (int)*(port));
   pthread_mutex_unlock(&print_mutex);
 
   if(bind(socket_fd, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {

@@ -7,7 +7,7 @@ void testLL();
 
 int main(void) {
   testLL();
-
+  return 0;
 }
 
 void testLL() {
