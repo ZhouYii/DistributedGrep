@@ -1,5 +1,6 @@
 #include "main.h"
 data_t _data;
+pthread_mutex_t print_mutex;
 
 /* For now all nodes are homogenous */
 int main(int argc, char** argv) {
@@ -13,6 +14,10 @@ int main(int argc, char** argv) {
  *  Then it will initialize the other nodes in the network.
  *  This suggests that we know all the nodes in the network anyways. */
 void init_structs() {
+  if(pthread_mutex_init(&mutex, NULL)) {
+    printf("Can't initialize mutex\n");
+    exit(1);
+  }
   _data.cluster_list = NULL;
   /* Populate some cluster data */
   for(int i = 0 ; i < 5 ; i++) 
@@ -48,7 +53,7 @@ void* remote_exec(void *dat) {
     return NULL;
   }
   
-  /* Send Grep, Wait grep ack, send cmd, recv until end, grab lock, print */
+  /* Send Grep, Wait grep ack, send cmd, recv until end, grab lock, print after gettin spinlock*/
   return NULL;
 }
 
