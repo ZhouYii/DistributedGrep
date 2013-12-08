@@ -2,12 +2,20 @@
 #define HELPER_H
 #include <stdio.h>
 #include <stdlib.h>
+#include "consts.h"
 void err_handler(const char* msg) {
     if(msg)
         printf("%s\n", msg);
     exit(1);
 }
 
+/* acks are in some form of int */
+char wait_ack(int sock_fd, int expected) {
+  char buf[BUF_SIZE];
+  memset(buf, '\0', BUF_SIZE);
+  recv(sock_fd, buf, BUF_SIZE, NO_FLAGS);
+  return atoi((char*)&buf) == expected;
+} 
 
 /* Returns a file descriptor corresponding to a connection to addr:port */
 int conn_socket(const char* addr, const int port) {
