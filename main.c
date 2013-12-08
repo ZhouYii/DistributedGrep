@@ -1,28 +1,5 @@
-#include <stdio.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <pthread.h>
-#include <string.h>
-#include "LL.h"
-#include "helper.h"
-#include "consts.h"
-
-typedef struct ClusterData {
-  list_node_t* cluster_list;
-  pthread_t server_thread;
-  /* More? */
-} data_t;
-
+#include "main.h"
 data_t _data;
-
-void* server_listener();
-int conn_socket(const char* addr, const int port);
-void init_structs();
-void start_repl();
 
 /* For now all nodes are homogenous */
 int main(int argc, char** argv) {
@@ -45,7 +22,7 @@ void init_structs() {
     }
   /* Launch server thread */
   if(0 != pthread_create(&_data.server_thread, NULL, server_listener, (int *)5000)) {
-    printf("failed allocating a new pthread for the listener");
+    printf("failed allocating a new pthread for the listener\n");
     exit(1);
   }
 }
@@ -56,30 +33,52 @@ void start_repl() {
     char input_buf[1024];
     fgets(input_buf, 1024, stdin);
     printf("%s\n", input_buf);
+    if(0 == strncmp("grep", input_buf, 4)) {
+      send_grep(input_buf);
+    }
     sock_fd = conn_socket("127.0.0.1", 5000);
   }
 }
 
-int conn_socket(const char* addr, const int port) {
-  int sock_fd = 0;
-  struct sockaddr_in serv_addr;
-
-  if((sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    printf("Cannot create socket\n");
-    return -1;
+void* remote_exec(void *dat) {
+  cmd_info_t* info = (cmd_info_t*) dat;
+  int sock_fd = conn_socket(info->addr, info->port);
+  if(sock_fd == -1) {
+    printf("Failed to connect with remote host %s:%d\n", info->addr, info->port);
+    return NULL;
   }
-
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(port);
-  serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-  if(connect(sock_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))<0) {
-    printf("Failed to connect socket\n");
-    return -1;
-  }
-
-  return sock_fd;
+  
+  /* Send Grep, Wait grep ack, send cmd, recv until end, grab lock, print */
+  return NULL;
 }
+
+void send_grep(const char* args) {
+  if(args == NULL) return;
+  /* TODO : connect socket ignores address argument */
+  list_node_t *head = _data.cluster_list;
+  while(head != NULL) {
+    /* Free this in the thread */
+    cmd_info_t *cmd = malloc(sizeof(cmd_info_t));
+    if(cmd == NULL) {
+      head = head->next;
+      continue;
+    }
+    cmd->addr = strdup(head->addr);
+    cmd->port = head->port;
+    cmd->cmd = GREP;
+    cmd->args = strdup(args+5);
+    
+    /* Spawn pthread to do the job */
+    pthread_t thread;
+    if(0 != pthread_create(&thread, NULL, remote_exec, &cmd)) {
+      printf("Failed to launch a grep job\n");
+      exit(1);
+    }
+  }
+
+  return;
+}
+
 
 void* server_listener(void* listen_port) {
   //char buf[BUF_SIZE];
