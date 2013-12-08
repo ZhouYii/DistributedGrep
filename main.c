@@ -1,6 +1,7 @@
 #include "main.h"
 data_t _data;
 pthread_mutex_t print_mutex;
+volatile int total_jobs = 1;
 
 /* For now all nodes are homogenous */
 int main(int argc, char** argv) {
@@ -14,7 +15,7 @@ int main(int argc, char** argv) {
  *  Then it will initialize the other nodes in the network.
  *  This suggests that we know all the nodes in the network anyways. */
 void init_structs() {
-  system("mkdir tmp log");
+  system("mkdir tmp log > /dev/null");
   if(pthread_mutex_init(&print_mutex, NULL)) {
     printf("Can't initialize mutex\n");
     exit(1);
@@ -36,6 +37,10 @@ void init_structs() {
 void start_repl() {
   while(1) {
     char input_buf[1024];
+    pthread_mutex_lock(&print_mutex);
+    printf("Start: ");
+    fflush(NULL);
+    pthread_mutex_unlock(&print_mutex);
     fgets(input_buf, 1024, stdin);
     if(0 == strncmp("grep", input_buf, 4)) {
       send_grep(input_buf);
@@ -47,27 +52,31 @@ void* remote_exec(void *dat) {
   cmd_info_t* info = (cmd_info_t*) dat;
   int sock_fd = conn_socket(info->addr, info->port);
   if(sock_fd == -1) {
-    printf("t`Failed to connect with remote host %s:%d\n", info->addr, info->port);
+    printf("Failed to connect with remote host %s:%d\n", info->addr, info->port);
     return NULL;
   }
   
-  /* Send Grep, Wait grep ack, send cmd, recv until end, grab lock, print after gettin spinlock*/
-  char sendbuf[5];
-  sprintf(sendbuf, "%d", GREP);
-  send(sock_fd, sendbuf, strlen(sendbuf), NO_FLAGS);
-  if(!wait_ack(sock_fd, GREP_ACK)) {
-    printf("Ack is wrong\n");
+  char buf[BUF_SIZE];
+  sprintf(buf, "%d", GREP);
+  send(sock_fd, buf, strlen(buf), NO_FLAGS);
+  if(!wait_ack(sock_fd, GREP_ACK)) 
     exit(1);
-  }
 
   send(sock_fd, info->args, strlen(info->args), NO_FLAGS);
   pthread_mutex_lock(&print_mutex);
-  //Print teh buffer!
+  printf("From %s:%d \n~~~~~~~~~~~~~~\n", info->addr, info->port);
+  while(recv(sock_fd, buf, BUF_SIZE, NO_FLAGS) > 0) 
+    printf("%s\n", buf);
+  
   pthread_mutex_unlock(&print_mutex);
+  free(info);
+  fflush(NULL);
+  total_jobs--;
   return NULL;
 }
 
 void send_grep(const char* args) {
+  total_jobs = 1;
   if(args == NULL) return;
   /* TODO : connect socket ignores address argument */
   list_node_t *head = _data.cluster_list;
@@ -90,9 +99,8 @@ void send_grep(const char* args) {
       exit(1);
     }
     head = head->next;
-    free(cmd);
   }
-  
+  while(total_jobs > 0);
   return;
 }
 
@@ -109,8 +117,10 @@ void* server_listener(void* listen_port) {
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   server_addr.sin_port = htons((uint16_t)listen_port);
+  pthread_mutex_lock(&print_mutex);
   printf("Listener started on port %d\n", (int)listen_port);
- 
+  pthread_mutex_unlock(&print_mutex);
+
   if(bind(socket_fd, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {
     printf("Failed to bind port");
     return 0;
@@ -124,19 +134,26 @@ void* server_listener(void* listen_port) {
     if(recv(conn_fd, buf, BUF_SIZE, NO_FLAGS) > 0) {
       if(atoi(buf) == GREP) {
         printf("GREP\n");
-        char sendbuf[BUF_SIZE], *filename;
+        char sendbuf[BUF_SIZE];
+        /* Ack for Grep */
         sprintf(sendbuf, "%d", GREP_ACK);
         send(conn_fd, sendbuf, strlen(sendbuf), NO_FLAGS);
+        /* Recieve args, execute */
         recv(conn_fd, buf, BUF_SIZE, NO_FLAGS);
         strip_newline(buf);
-        filename = timestamp();
-        sprintf(sendbuf, "grep %s log/*> tmp/%s", buf, filename);
-        system(sendbuf);
-
-
-        free(filename);
+        sprintf(sendbuf, "grep %s log/*", buf);
+        /* Send results to client */
+        FILE* f = popen(sendbuf, "r");
+        if(f > 0) {
+          memset(buf, '\0', sizeof(buf));
+          while(fgets(buf, sizeof(buf), f) != NULL) {
+            send(conn_fd, buf, strlen(buf), NO_FLAGS);
+            memset(buf, '\0', sizeof(buf));
+          }
+        }
       }
     }
+    fflush(NULL);
     close(conn_fd);
   }
 

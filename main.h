@@ -10,6 +10,7 @@
 #include "LL.h"
 #include "helper.h"
 #include "consts.h"
+#include <errno.h>
 typedef enum {GREP} cmd_t;
 typedef enum {GREP_ACK, ACK=100} ack_t;
 

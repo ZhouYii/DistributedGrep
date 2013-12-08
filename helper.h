@@ -22,6 +22,9 @@ void to_file_name(char* str) {
     return;
   char *fast=str, *slow=str;
   while(*fast != '\0') {
+    /* Filename addressing issues */
+    if(*fast == ':')
+      *fast = '_';
     if(*fast != ' ') 
       *slow++ = *fast;
     fast++;
